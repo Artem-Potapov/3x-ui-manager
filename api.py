@@ -4,14 +4,15 @@ import json
 import logging
 import subprocess
 from collections.abc import Sequence, Mapping
-from typing import Self, Optional, Dict, Iterable, AsyncIterable, TypeAlias, Type, Union, Any, List, Tuple
+from logging import DEBUG
+from typing import Self, Optional, Dict, Iterable, AsyncIterable, TypeAlias, Type, Union, Any, List, Tuple, Literal
 
 import httpx
 from httpx import Response, AsyncClient
 from requests import session
 
 import util
-from util import JsonType
+from util import JsonType, async_range
 
 DataType: Type[str|bytes|Iterable[bytes]|AsyncIterable[bytes]] = Union[str, bytes, Iterable[bytes], AsyncIterable[bytes]]
 PrimitiveData = Optional[Union[str, int, float, bool]]
@@ -57,6 +58,34 @@ class XUIClient:
             cls._instance = super(XUIClient, cls).__new__(cls)
         return cls._instance
 
+    async def _safe_request(self,
+                            method: Literal["get", "post", "patch", "delete", "put"],
+                            **kwargs) -> Response:
+        async for attempt in async_range(self.max_retries):
+            resp = await self.session.request(method=method, **kwargs)
+            if resp.status_code // 10 != 2: #because it can return either 201 or 202
+                if resp.status_code == 404:
+                    now: float = datetime.datetime.now().timestamp()
+                    if self.session_start is None or now - self.session_start > self.session_duration:
+                        await self.login()
+                        continue
+                    else:
+                        return Response(12)
+                        #raise RuntimeError("Server returned a 404, and the session should still be valid")
+                else:
+                    return resp
+
+            status = util.check_xui_response_validity(resp)
+            if status == "OK":
+                return resp
+            elif status == "DB_LOCKED":
+                if attempt + 1 >= self.max_retries:
+                    resp.status_code = 518 # so the error can simply be handled as a "bad request"
+                    return resp
+                await asyncio.sleep(self.retry_delay)
+                continue
+        raise RuntimeError(f"For some reason safe_request didn't exit, dump:\nmethod:\n{method}\n{kwargs}")
+
 
     async def safe_get(self,
                        url: httpx.URL | str,
@@ -64,30 +93,16 @@ class XUIClient:
                        params: ParamType | None = None,
                        headers: HeaderType | None = None,
                        cookies: CookieType | None = None) -> Response:
+        #NOTE: "safe" only means "with retries if database is locked"!
         if self.session is None:
             raise RuntimeError("Session is not initialized")
 
-        for attempt in range(self.max_retries):
-            resp = await self.session.get(url=url, params=params, headers=headers, cookies=cookies)
-            if resp.status_code != 200:
-                if resp.status_code == 404:
-                    now: float = datetime.datetime.now().timestamp()
-                    if self.session_start is None or now - self.session_start > self.session_duration:
-                        await self.login()
-                        continue
-                raise RuntimeError(f"Server returned status code {resp.status_code}")
-
-            status = util.check_xui_response_validity(resp)
-            if status == "OK":
-                return resp
-            if status == "DB_LOCKED":
-                if attempt + 1 >= self.max_retries:
-                    raise RuntimeError("Database locked: max retries exceeded")
-                await asyncio.sleep(self.retry_delay)
-                continue
-
-
-            raise RuntimeError(f"Unexpected response validity status: {status}")
+        resp = await self._safe_request(method="get",
+                                        url=url,
+                                        params=params,
+                                        headers=headers,
+                                        cookies=cookies)
+        return resp
 
     async def safe_post(self,
                         url: httpx.URL | str,
@@ -101,43 +116,31 @@ class XUIClient:
         if self.session is None:
             raise RuntimeError("Session is not initialized")
 
-        for attempt in range(self.max_retries):
-            resp = await self.session.post(url=url, content=content, data=data, json=json,
-                                           params=params, headers=headers, cookies=cookies)
-            if resp.status_code != 200:
-                if resp.status_code == 404:
-                    now: float = datetime.datetime.now().timestamp()
-                    if self.session_start is None or now - self.session_start > self.session_duration:
-                        await self.login()
-                        continue
-                raise RuntimeError(f"Server returned status code {resp.status_code}")
-
-            status = util.check_xui_response_validity(resp)
-            if status == "OK":
-                return resp
-            if status == "DB_LOCKED":
-                if attempt + 1 >= self.max_retries:
-                    raise RuntimeError("Database locked: max retries exceeded")
-                await asyncio.sleep(self.retry_delay)
-                continue
-
-            raise RuntimeError(f"Unexpected response validity status: {status}")
+        resp = await self._safe_request(method="post",
+                                        url=url,
+                                        content=content,
+                                        data=data,
+                                        json=json,
+                                        params=params,
+                                        headers=headers,
+                                        cookies=cookies)
+        return resp
 
     async def login(self, username: str|None = None, password: str|None = None,
                     two_fac_code: str|None = None) -> None:
         if self.xui_username and username:
-            raise ValueError("You must provide a username either when initing XUI or to the function, not both")
+            self.xui_username = username
         if self.xui_password and password:
-            raise ValueError("You must provide a password either when initing XUI or to the function, not both")
+            self.xui_password = password
         if self.two_fac_code and two_fac_code:
-            raise ValueError("You must provide a 2fa code either when initing XUI or to the function, not both")
+            self.two_fac_code = two_fac_code
 
         payload = {
-            "username": username,
-            "password": password,
+            "username": self.xui_username,
+            "password": self.xui_password,
         }
         if two_fac_code is not None:
-            payload["twoFactorCode"] = two_fac_code
+            payload["twoFactorCode"] = self.two_fac_code
 
         resp = await self.session.post("/login", data=payload)
         resp_json = resp.json()
@@ -153,7 +156,7 @@ class XUIClient:
     def connect(self) -> None:
         self.session = AsyncClient(base_url=self.base_url)
 
-    async def disconnect(self):
+    async def disconnect(self) -> None:
         await self.session.aclose()
 
     async def __aenter__(self) -> Self:
