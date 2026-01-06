@@ -1,12 +1,16 @@
+import asyncio
 import json
 
+import httpx
 import requests
 import dotenv, os
-from pydantic_models import Inbound
+
+from api import XUIClient
+from models import Inbound
 
 dotenv.load_dotenv("./.env")
-BASE_URL = os.getenv("BASE_URL")
-PORT = os.getenv("PORT")
+BASE_URL = os.getenv("BASE_LINK")
+PORT = int(os.getenv("PORT"))
 BASE_PATH = os.getenv("BASE_PATH")
 XUI_USERNAME = os.getenv("XUI_USERNAME")
 XUI_PASSWORD = os.getenv("XUI_PASSWORD")
@@ -32,13 +36,20 @@ class ResponseStub(requests.Response):
     def json(self):
         return self.js
 
-with open("response_stub.json", "r", encoding="utf-8") as file:
-    b = ResponseStub(json.load(file))
 
-print(b.json())
-res: list[dict] = b.json()["obj"]
-ob = res[0]
-print(ob)
 
-uwu = Inbound.from_response(b, list)
-print(uwu)
+
+async def create_client(telegram_id: int):
+    """
+    for inb in all_needeed_inbounds:
+        inb.add_client(uuid, blahblahblah)
+    """
+
+async def main():
+    async with XUIClient(BASE_URL, PORT, BASE_PATH) as client:
+        client.connect()
+        print("UwU")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
