@@ -42,7 +42,7 @@ class XUIClient:
         self.base_host: str = base_website
         self.base_port: int = base_port
         self.base_path: str = base_path
-        self.base_url: str = f"https://{self.base_host}:{self.base_port}{self.base_path}"
+        self.base_url: str = f"https://{self.base_host}:{self.base_port}/{self.base_path}"
         self.session_start: float|None = None
         self.session_duration: int = session_duration
         self.xui_username: str|None = xui_username
