@@ -46,9 +46,11 @@ async def create_client(telegram_id: int):
     """
 
 async def main():
-    async with XUIClient(BASE_URL, PORT, BASE_PATH) as client:
-        client.connect()
+    async with XUIClient(BASE_URL, PORT, BASE_PATH,
+                         xui_username=XUI_USERNAME,
+                         xui_password=XUI_PASSWORD) as client:
         print("UwU")
+        await client.create_and_add_prod_client(128124812, "help me")
 
 
 if __name__ == "__main__":
