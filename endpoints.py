@@ -133,6 +133,22 @@ class Clients(BaseEndpoint):
         #     print(resp.json()["msg"])
         # return resp
 
+    async def _request_update_client(self, client: models.InboundClients | models.SingleInboundClient,
+                                     inbound_id: int|None=None,
+                                     *, original_uuid: str|None=None) -> Response:
+        if isinstance(client, models.SingleInboundClient):
+            if inbound_id is None:
+                raise ValueError("Provide a parent inbound ID or pass models.InboundClients")
+            client = models.InboundClients(parent_id=inbound_id,
+                                           settings=models.InboundClients.Settings(clients=[client]))
+        else:
+            if len(client.settings.clients) != 1:
+                raise ValueError(f"You can only update 1 client at a time, instead got {len(client.settings.clients)}")
+
+        _endpoint = f"updateClient/{original_uuid if original_uuid else client.settings.clients[0].uuid}"
+        resp = await self.client.safe_post(f"{self._url}{_endpoint}", json=client.model_dump_json())
+
+        return resp
 
 
 a = models.InboundClients.model_validate_json('''{"id": 3, "settings": {"clients": [{ "id": "0213c327-c619-4998-9bb3-adaced38c68b", "flow": "", "email": "chipichipichapachapa", "limitIp": 0, "totalGB": 0, "expiryTime": 0, "enable": true, "tgId": "", "subId": "86xi6py5uwsgokh1", "comment": "", "reset": 0 }, { "id": "02333327-c619-4998-9bb3-adaced38c68b", "flow": "", "email": "chipichdwaadwhapachapa", "limitIp": 0, "totalGB": 0, "expiryTime": 0, "enable": true, "tgId": "", "subId": "86xi6ddduwsgokh1", "comment": "", "reset": 0 }]}}''')
