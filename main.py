@@ -6,10 +6,10 @@ import requests
 import dotenv, os
 
 from api import XUIClient
-from models import Inbound
+from models import Inbound, SingleInboundClient
 
 dotenv.load_dotenv("./.env")
-BASE_URL = os.getenv("BASE_LINK")
+BASE_URL = os.getenv("BASE_URL")
 PORT = int(os.getenv("PORT"))
 BASE_PATH = os.getenv("BASE_PATH")
 XUI_USERNAME = os.getenv("XUI_USERNAME")
@@ -49,7 +49,6 @@ async def main():
     async with XUIClient(BASE_URL, PORT, BASE_PATH,
                          xui_username=XUI_USERNAME,
                          xui_password=XUI_PASSWORD) as client:
-        print("UwU")
         await client.create_and_add_prod_client(128124812, "help me")
 
 
