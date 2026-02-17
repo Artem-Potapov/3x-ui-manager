@@ -1,4 +1,6 @@
 import json
+import time
+from datetime import datetime, UTC
 from linecache import clearcache
 from typing import Generic, Type, Literal, LiteralString, Union, List, Dict, TYPE_CHECKING
 
@@ -6,10 +8,12 @@ import requests
 from httpx import Response
 from pydantic import ValidationError
 from pydantic.main import ModelT
+from dataclasses import replace
 
 import models
+import util
 from util import camel_to_snake, JsonType
-from models import Inbound
+from models import Inbound, SingleInboundClient
 
 from api import XUIClient
 
@@ -20,7 +24,7 @@ class BaseEndpoint(Generic[ModelT]):
     def __init__(self, client: "XUIClient") -> None:
         self.client = client
 
-    async def _get_simple_response(self, caller_endpoint: str) -> JsonType:
+    async def _simple_get(self, caller_endpoint: str) -> JsonType:
         endpoint_url: str = caller_endpoint
         if self._url not in caller_endpoint:
             endpoint_url = f"{self._url}{caller_endpoint}"
@@ -31,30 +35,29 @@ class BaseEndpoint(Generic[ModelT]):
         else:
             raise RuntimeError(f"Error: wrong status code {resp.status_code}")
 
+
 class Server(BaseEndpoint):
     _url = "panel/api/server"
 
     async def new_uuid(self) -> str:
         endpoint = "/getNewUUID"
-        resp_json = await self._get_simple_response(endpoint)
+        resp_json = await self._simple_get(endpoint)
         return resp_json["uuid"]
 
     async def new_x25519(self) -> dict[Literal["privateKey", "publicKey"], str]:
         endpoint = "/getNewX25519Cert"
-        resp_json = await self._get_simple_response(endpoint)
+        resp_json = await self._simple_get(endpoint)
         return resp_json
 
     async def new_mldsa65(self) -> dict[Literal["verify", "seed"], str]:
         endpoint = "/getNewmldsa65"
-        resp_json = await self._get_simple_response(endpoint)
+        resp_json = await self._simple_get(endpoint)
         return resp_json
 
     async def new_mlkem768(self) -> dict[Literal["client", "seed"], str]:
         endpoint = "/getNewmlkem768x"
-        resp_json = await self._get_simple_response(endpoint)
+        resp_json = await self._simple_get(endpoint)
         return resp_json
-
-
 
 
 class Inbounds(BaseEndpoint):
@@ -62,38 +65,37 @@ class Inbounds(BaseEndpoint):
 
     async def get_all(self) -> List[Inbound]:
         endpoint = "/list"
-        json = await self._get_simple_response(f"{endpoint}")
+        json = await self._simple_get(f"{endpoint}")
         inbounds = Inbound.from_list(json, client=self.client)
         return inbounds
 
-
     async def get_specific_inbound(self, id) -> Inbound:
         endpoint = f"/get/{id}"
-        pass
-        # no use for this yet...
-
-
+        json = await self._simple_get(f"{endpoint}")
+        inbound = Inbound(client=self.client, **json)
+        return inbound
 
 
 class Clients(BaseEndpoint):
-    _url = "panel/api/inbounds"
+    _url = "panel/api/inbounds/"
+
     #although it's the same url, they should be differentiated
 
-    async def get_client_with_email(self, email) -> models.ClientStats:
-        endpoint = f"/getClientTraffics/{email}"
-        resp = await self._get_simple_response(endpoint)
-        return models.ClientStats.model_validate_json(str(resp))
+    async def get_client_with_email(self, email: str) -> models.ClientStats:
+        endpoint = f"getClientTraffics/{email}"
+        resp = await self._simple_get(endpoint)
+        return models.ClientStats.model_validate(resp)
 
-    async def get_client_with_uuid(self, uuid) -> List[models.ClientStats]:
-        endpoint = f"/getClientTrafficsById/{uuid}"
-        resp = await self._get_simple_response(endpoint)
+    async def get_client_with_uuid(self, uuid: str) -> List[models.ClientStats]:
+        endpoint = f"getClientTrafficsById/{uuid}"
+        resp = await self._simple_get(endpoint)
         client_stats = models.ClientStats.from_list(resp, client=self.client)
         return client_stats
 
 
     async def add_client(self, client: models.InboundClients | models.SingleInboundClient | Dict,
-                         inbound_id: int|None=None) -> Response:
-        endpoint = f"/addClient"
+                         inbound_id: int | None = None) -> Response:
+        endpoint = f"addClient"
         if isinstance(client, Dict):
             try:
                 client = str(client)
@@ -127,15 +129,11 @@ class Clients(BaseEndpoint):
         #YOU NEED TO PASS SETTINGS AS A STRING, NOT AS A DICT, YOU FUCKING DUMBASS!
         print(resp)
         print(resp.json())
-
-        # if not resp.json()["success"]:
-        #     print("Error while creating a client")
-        #     print(resp.json()["msg"])
-        # return resp
+        return resp
 
     async def _request_update_client(self, client: models.InboundClients | models.SingleInboundClient,
-                                     inbound_id: int|None=None,
-                                     *, original_uuid: str|None=None) -> Response:
+                                     inbound_id: int | None = None,
+                                     *, original_uuid: str | None = None) -> Response:
         if isinstance(client, models.SingleInboundClient):
             if inbound_id is None:
                 raise ValueError("Provide a parent inbound ID or pass models.InboundClients")
@@ -174,10 +172,19 @@ class Clients(BaseEndpoint):
         resp = await self._request_update_client(updated, inbound_id)
         return resp
 
-
     async def delete_expired_clients(self, inbound_id: int) -> Response:
         _endpoint = f"delDepletedClients/"
         resp = await self.client.safe_post(f"{self._url}{_endpoint}{inbound_id}")
+        return resp
+
+    async def delete_client_by_email(self, email: str, inbound_id: int) -> Response:
+        _endpoint = f"{inbound_id}/delClient/{email}"
+        resp = await self.client.safe_post(f"{self._url}{_endpoint}")
+        return resp
+
+    async def delete_client_by_uuid(self, uuid: str, inbound_id: int) -> Response:
+        _endpoint = f"{inbound_id}/delClient/{uuid}"
+        resp = await self.client.safe_post(f"{self._url}{_endpoint}")
         return resp
 
 # a = models.InboundClients.model_validate_json('''{"id": 3, "settings": {"clients": [{ "id": "0213c327-c619-4998-9bb3-adaced38c68b", "flow": "", "email": "penis", "limitIp": 0, "totalGB": 0, "expiryTime": 0, "enable": true, "tgId": "", "subId": "86xi6py5uwsgokh1", "comment": "", "reset": 0 }, { "id": "02333327-c619-4998-9bb3-adaced38c68b", "flow": "", "email": "chipichdwaadwhapachapa", "limitIp": 0, "totalGB": 0, "expiryTime": 0, "enable": true, "tgId": "", "subId": "86xi6ddduwsgokh1", "comment": "", "reset": 0 }]}}''')

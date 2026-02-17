@@ -39,7 +39,7 @@ def sub_from_tgid(telegram_id: int) -> str:
 ensure_2_digits = lambda x: str(x) if x >= 10 else f"0{x}"
 
 
-def new_telegram_uuid(telegram_id: int, fixed: bool = True) -> str:
+def get_telegram_uuid(telegram_id: int, fixed: bool = True) -> str:
     zeros = 12 - len(str(telegram_id))
     resid = f"{zeros * '0'}{telegram_id}"
     if fixed:
@@ -86,6 +86,27 @@ async def check_xui_response_validity(response: JsonType | httpx.Response) -> st
             print(f"Unsuccessful operation! Message: {json_resp["msg"]}")
             return "ERROR"
     raise RuntimeError("Validator got something very unexpected (Please don't shove responses with non-20X status codes in here...)")
+
+
+def get_days_until_expiry(expiry_time: int) -> float:
+    """
+    Calculate the number of days until a client expires.
+
+    Args:
+        expiry_time: Client expiry time as UNIX timestamp (in seconds)
+
+    Returns:
+        Number of days until expiry. Returns negative value if already expired.
+        Returns a very large number if expiry_time is 0 (no expiry).
+    """
+    if expiry_time == 0:
+        return float('inf')
+
+    current_timestamp = datetime.now(UTC).timestamp()
+    seconds_remaining = expiry_time - current_timestamp
+    days_remaining = seconds_remaining / 86400  # 86400 seconds in a day
+
+    return days_remaining
 
 
 class DBLockedError(Exception):
