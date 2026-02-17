@@ -26,18 +26,14 @@ class BaseModel(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(ignored_types=(cached_property, ))
 
     def model_post_init(self, context: Any, /) -> None:
-        print(f"Model {self.__class__}, {self} inititalized")
+        print(f"Model {self.__class__}, {self} initialized")
 
 
     @classmethod
     def from_list(cls, args: List[Dict[str, Any]],
                   client: "XUIClient"
                   ) -> List[Self]:
-        uwu = []
-        for obj in args:
-            tmp = cls(client=client, **obj) #I give up
-            uwu.append(tmp)
-        return uwu
+        return [cls(client=client, **obj) for obj in args]
 
     @classmethod
     async def from_response(

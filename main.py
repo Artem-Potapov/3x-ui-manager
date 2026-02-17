@@ -50,6 +50,11 @@ async def main():
                          xui_username=XUI_USERNAME,
                          xui_password=XUI_PASSWORD) as client:
         await client.create_and_add_prod_client(128124812, "help me")
+        await asyncio.sleep(2)
+        print("INB CREATED")
+        await client.delete_client_by_tgid_all_inbounds(128124812)
+        while True:
+            await asyncio.sleep(1)
 
 
 if __name__ == "__main__":
