@@ -3,13 +3,18 @@ Shared pytest fixtures for endpoint tests.
 """
 import asyncio
 import os
+import sys
 import pytest
 import dotenv
 
+# Add parent directory to Python path so we can import api module
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + "/code")
+
 from api import XUIClient
 
-# Load environment variables
-dotenv.load_dotenv("../.env")
+# Load environment variables from parent directory
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+dotenv.load_dotenv(env_path)
 
 
 @pytest.fixture(scope="session")
@@ -50,6 +55,7 @@ async def xui_client() -> XUIClient:
     try:
         await client.login()
     except Exception as e:
+        raise
         await client.disconnect()
         pytest.skip(f"Failed to authenticate with XUIClient: {e}")
 

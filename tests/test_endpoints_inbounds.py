@@ -1,13 +1,14 @@
 """Unit tests for Inbounds endpoint."""
 import pytest
-from api import XUIClient
-from models import Inbound
+from code.api import XUIClient
+from code.models import Inbound
 
 
 class TestInboundsEndpoint:
     """Test suite for Inbounds endpoint."""
 
     @pytest.mark.asyncio
+    @pytest.mark.dependency(name="test_get_inbounds_all")
     async def test_get_all_inbounds(self, xui_client: XUIClient):
         """Test get_all returns list of Inbounds."""
         inbounds = await xui_client.inbounds_end.get_all()
@@ -16,6 +17,7 @@ class TestInboundsEndpoint:
         assert all(isinstance(i, Inbound) for i in inbounds)
 
     @pytest.mark.asyncio
+    @pytest.mark.dependency(name="test_get_inbounds_verify_field_types")
     async def test_get_all_inbounds_field_types(self, xui_client: XUIClient):
         """Test inbound fields have correct types."""
         inbounds = await xui_client.inbounds_end.get_all()
@@ -27,6 +29,7 @@ class TestInboundsEndpoint:
         assert 1 <= inbound.port <= 65535
 
     @pytest.mark.asyncio
+    @pytest.mark.dependency(name="test_get_inbound_specific")
     async def test_get_specific_inbound(self, xui_client: XUIClient):
         """Test get_specific_inbound returns matching inbound."""
         all_inbounds = await xui_client.inbounds_end.get_all()
@@ -37,6 +40,7 @@ class TestInboundsEndpoint:
         assert specific.id == test_id
 
     @pytest.mark.asyncio
+    @pytest.mark.dependency(name="test_match_inbound_all_specific_same")
     async def test_get_specific_inbound_matches_get_all(self, xui_client: XUIClient):
         """Test get_specific_inbound matches data from get_all."""
         all_inbounds = await xui_client.inbounds_end.get_all()

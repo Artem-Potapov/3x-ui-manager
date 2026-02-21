@@ -1,13 +1,14 @@
 """Unit tests for Clients endpoint."""
 import pytest
-from api import XUIClient
-from models import ClientStats, SingleInboundClient
+from code.api import XUIClient
+from code.models import ClientStats
 
 
 class TestClientsEndpoint:
     """Test suite for Clients endpoint."""
 
     @pytest.mark.asyncio
+    @pytest.mark.dependency(name="test_get_client_email")
     async def test_get_client_with_email(self, xui_client: XUIClient):
         """Test get_client_with_email returns ClientStats."""
         all_inbounds = await xui_client.inbounds_end.get_all()
@@ -24,6 +25,7 @@ class TestClientsEndpoint:
         assert client_stats.email == test_email
 
     @pytest.mark.asyncio
+    @pytest.mark.dependency(name="test_get_client_uuid")
     async def test_get_client_with_uuid(self, xui_client: XUIClient):
         """Test get_client_with_uuid returns list of ClientStats."""
         all_inbounds = await xui_client.inbounds_end.get_all()
