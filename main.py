@@ -37,8 +37,6 @@ class ResponseStub(requests.Response):
         return self.js
 
 
-
-
 async def create_client(telegram_id: int):
     """
     for inb in all_needeed_inbounds:

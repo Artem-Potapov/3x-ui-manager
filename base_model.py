@@ -1,9 +1,3 @@
-"""Base model class for VPNAPIHandler data models.
-
-This module provides a base Pydantic model with common functionality
-for parsing API responses and handling client references.
-"""
-
 import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union, overload, Self, ClassVar, Annotated, Literal, Callable

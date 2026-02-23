@@ -1,9 +1,3 @@
-"""API endpoint handlers for the 3X-UI panel.
-
-This module provides endpoint classes that wrap the 3X-UI API endpoints
-for server operations, inbound management, and client management.
-"""
-
 import json
 import time
 from datetime import datetime, UTC
