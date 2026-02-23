@@ -30,11 +30,48 @@ HeaderType = Union[
 
 
 class XUIClient:
+    """Main client for interacting with the 3X-UI panel API.
+
+    This class provides methods for authenticating with the 3X-UI panel,
+    managing sessions, and performing operations on inbounds and clients.
+
+    The client implements a singleton pattern to ensure only one instance
+    exists at a time.
+
+    Attributes:
+        PROD_STRING: String used to identify production inbounds.
+        session: The async HTTP client session.
+        base_host: The server hostname.
+        base_port: The server port.
+        base_path: The base path for the API.
+        base_url: The full base URL for API requests.
+        session_start: Timestamp of when the session was created.
+        session_duration: Maximum session duration in seconds.
+        xui_username: Username for authentication.
+        xui_password: Password for authentication.
+        two_fac_code: Two-factor authentication code (if enabled).
+        max_retries: Maximum number of retry attempts for failed requests.
+        retry_delay: Delay in seconds between retries.
+        server_end: Server endpoint handler.
+        clients_end: Clients endpoint handler.
+        inbounds_end: Inbounds endpoint handler.
+    """
     _instance = None
 
     def __init__(self, base_website: str, base_port: int, base_path: str,
                  *, xui_username: str | None = None, xui_password: str | None = None,
                  two_fac_code: str | None = None, session_duration: int = 3600) -> None:
+        """Initialize the XUIClient.
+
+        Args:
+            base_website: The server hostname (e.g., "example.com").
+            base_port: The server port (e.g., 443).
+            base_path: The base path for the API (e.g., "/panel").
+            xui_username: Username for authentication.
+            xui_password: Password for authentication.
+            two_fac_code: Two-factor authentication code (if enabled).
+            session_duration: Maximum session duration in seconds. Defaults to 3600.
+        """
         import endpoints # look, I know it's bad, but we need to evade cyclical imports
         self.PROD_STRING = "tester-777"
         self.session: AsyncClient | None = None
@@ -56,6 +93,15 @@ class XUIClient:
 
     #========================singleton pattern========================
     def __new__(cls, *args, **kwargs):
+        """Create or return the singleton instance.
+
+        Args:
+            *args: Positional arguments passed to __init__.
+            **kwargs: Keyword arguments passed to __init__.
+
+        Returns:
+            The singleton XUIClient instance.
+        """
         print("initializing client")
         if cls._instance is None:
             print("nu instance")
@@ -66,7 +112,21 @@ class XUIClient:
     async def _safe_request(self,
                             method: Literal["get", "post", "patch", "delete", "put"],
                             **kwargs) -> Response:
+        """Execute an HTTP request with automatic retry on database lock.
 
+        This method handles automatic session refresh and retries when
+        the 3X-UI database is locked.
+
+        Args:
+            method: The HTTP method to use.
+            **kwargs: Additional arguments passed to the HTTP request.
+
+        Returns:
+            The HTTP response.
+
+        Raises:
+            RuntimeError: If max retries exceeded or session is invalid.
+        """
         print(f"SAFE REQUEST, {method}, is running to a URL of {kwargs["url"]}")
         print(str(self.session.base_url) + str(kwargs["url"]))
         async for attempt in async_range(self.max_retries):
@@ -102,6 +162,23 @@ class XUIClient:
                        params: ParamType | None = None,
                        headers: HeaderType | None = None,
                        cookies: CookieType | None = None) -> Response:
+        """Execute a safe GET request with automatic retry on database lock.
+
+        Note:
+            "Safe" only means "with retries if database is locked".
+
+        Args:
+            url: The URL to request.
+            params: Query parameters (optional).
+            headers: Request headers (optional).
+            cookies: Request cookies (optional).
+
+        Returns:
+            The HTTP response.
+
+        Raises:
+            RuntimeError: If the session is not initialized.
+        """
         #NOTE: "safe" only means "with retries if database is locked"!
         if self.session is None:
             raise RuntimeError("Session is not initialized")
@@ -123,6 +200,26 @@ class XUIClient:
                         params: ParamType | None = None,
                         headers: HeaderType | None = None,
                         cookies: CookieType | None = None) -> Response:
+        """Execute a safe POST request with automatic retry on database lock.
+
+        Note:
+            "Safe" only means "with retries if database is locked".
+
+        Args:
+            url: The URL to request.
+            content: Request content (optional).
+            data: Form data (optional).
+            json: JSON body (optional).
+            params: Query parameters (optional).
+            headers: Request headers (optional).
+            cookies: Request cookies (optional).
+
+        Returns:
+            The HTTP response.
+
+        Raises:
+            RuntimeError: If the session is not initialized.
+        """
         if self.session is None:
             raise RuntimeError("Session is not initialized")
 
@@ -138,6 +235,15 @@ class XUIClient:
 
     #========================Login and session management==============================
     async def login(self) -> None:
+        """Authenticate the client with the 3X-UI panel.
+
+        This method performs the login action, establishing a session for
+        subsequent API requests.
+
+        Raises:
+            ValueError: If the login credentials are incorrect.
+            RuntimeError: If the server returns an error status code.
+        """
         payload = {
             "username": self.xui_username,
             "password": self.xui_password,
@@ -157,18 +263,48 @@ class XUIClient:
             raise RuntimeError(f"Error: server returned a status code of {resp.status_code}")
 
     def connect(self) -> Self:
+        """Establish a connection to the 3X-UI panel.
+
+        This method creates an async HTTP client session.
+
+        Returns:
+            Self: The XUIClient instance.
+        """
         self.session = AsyncClient(base_url=self.base_url)
         return self
 
     async def disconnect(self) -> None:
+        """Close the client session.
+
+        This method closes the async HTTP client session.
+        """
         await self.session.aclose()
 
     async def __aenter__(self) -> Self:
+        """Enter the async context manager.
+
+        This method is called when the client is used in an `async with`
+        statement. It establishes a connection and starts the cache clearing
+        task.
+
+        Returns:
+            Self: The XUIClient instance.
+        """
         self.connect()
         asyncio.create_task(self.clear_prod_inbound_cache())
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Exit the async context manager.
+
+        This method is called when the client context is exited. It closes
+        the client session.
+
+        Args:
+            exc_type: The exception type, if an exception occurred.
+            exc_val: The exception value, if an exception occurred.
+            exc_tb: The exception traceback, if an exception occurred.
+        """
         print("disconnectin'")
         await self.disconnect()
         return
@@ -176,6 +312,17 @@ class XUIClient:
     #========================inbound management========================
     @alru_cache
     async def get_production_inbounds(self) -> List[Inbound]:
+        """Retrieve production inbounds.
+
+        This method fetches all inbounds and filters them based on the
+        production string. It is cached for efficiency.
+
+        Returns:
+            List[Inbound]: A list of production inbounds.
+
+        Raises:
+            RuntimeError: If no production inbounds are found.
+        """
         inbounds = await self.inbounds_end.get_all()
         usable_inbounds: list[Inbound] = []
         for inb in inbounds:
@@ -187,6 +334,16 @@ class XUIClient:
         return usable_inbounds
 
     async def clear_prod_inbound_cache(self):
+        """Clear the production inbound cache.
+
+        This method clears the cache of production inbounds and refills it
+        by fetching the inbounds again. It is intended to be run as a
+        background task.
+
+        Note:
+            This method currently runs every 10 seconds. Please change the
+            timer from 5 to 60*60*24 in the code.
+        """
         #This is useless for now, but later get_production_inbounds() will be cached,
         # and this will clear the cache every 24 hours or so, to make sure the client
         # always has the most up-to-date inbounds list
@@ -200,6 +357,23 @@ class XUIClient:
 
     #========================clients management========================
     async def get_client_with_tgid(self, tgid: int, inbound_id: int | None = None) -> List[ClientStats]:
+        """Retrieve client information by Telegram ID.
+
+        This method fetches client information using the Telegram ID. If
+        an inbound ID is provided, it fetches the client by email derived
+        from the Telegram ID and inbound ID.
+
+        Args:
+            tgid: The Telegram ID of the client.
+            inbound_id: The ID of the inbound (optional).
+
+        Returns:
+            List[ClientStats]: A list of client statistics.
+
+        Note:
+            If the client is not found by Telegram ID, the method falls back
+            to using the Telegram ID and inbound ID to fetch the client.
+        """
         if inbound_id:
             email = util.generate_email_from_tgid_inbid(tgid, inbound_id)
             resp = [await self.clients_end.get_client_with_email(email)]
@@ -209,6 +383,20 @@ class XUIClient:
         return resp
 
     async def create_and_add_prod_client(self, telegram_id: int, additional_remark: str = None):
+        """Create and add a production client.
+
+        This method creates a new client with the given Telegram ID and
+        adds it to the production inbounds. The client is configured with
+        default settings and the additional remark.
+
+        Args:
+            telegram_id: The Telegram ID of the client.
+            additional_remark: An optional additional remark for the client.
+
+        Returns:
+            List[Response]: A list of responses from the server for each
+            inbound the client was added to.
+        """
         production_inbounds: List[Inbound] = await self.get_production_inbounds()
 
         responses = []
@@ -272,8 +460,7 @@ class XUIClient:
         return resp
 
     async def delete_client_by_tgid(self, telegram_id: int, inbound_id: int) -> Response:
-        """
-        Delete a client from a specific inbound by Telegram ID.
+        """Delete a client from a specific inbound by Telegram ID.
 
         Args:
             telegram_id: The Telegram ID of the client
@@ -287,8 +474,7 @@ class XUIClient:
         return resp
 
     async def delete_client_by_tgid_all_inbounds(self, telegram_id: int) -> List[Response]:
-        """
-        Delete a client from all production inbounds by Telegram ID.
+        """Delete a client from all production inbounds by Telegram ID.
 
         Args:
             telegram_id: The Telegram ID of the client
