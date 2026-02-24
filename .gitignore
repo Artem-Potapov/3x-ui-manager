@@ -1,7 +1,8 @@
 ../.idea/
 __pycache__/
 .env
-response_stub.json
-response_stub_inbound.json
+.editorconfig
+./tests/response_stubs/
 response*
 !response*.py
+dist/

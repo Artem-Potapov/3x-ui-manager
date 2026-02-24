@@ -1,0 +1,58 @@
+[project]
+name = "Python-3xui"
+version = "0.0.1"
+authors = [
+  { name="JustMe_001", email="justme001.causation755@passinbox.com" },
+]
+description = "3x-ui wrapper for python"
+readme = "README.md"
+
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+]
+
+license = "Apache-2.0"
+license-files = ["LICEN[CS]E*"]
+
+dependencies = [
+    "pydantic ~= 2.12.5, < 3",
+    "httpx ~=0.28.1",
+    "dotenv ~= 0.9.9",
+    "async_lru ~= 2.2.0"
+]
+
+
+[project.optional-dependencies]
+testing = ["requests", "pytest", "pytest-asyncio", "pytest-dependency"]
+
+
+[project.urls]
+Homepage = "https://github.com/Artem-Potapov/3x-py"
+Issues = "https://github.com/Artem-Potapov/3x-py/issues"
+
+
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "python_3xui/*.py",
+    "/tests/*.py",
+    "/tests/pytest.ini"
+]
+exclude = [
+    "requirements.txt",
+    "main.py",
+    ".env"
+]
+
+
+[[tool.hatch.envs.hatch-test.matrix]]
+python = ["3.12", "3.11"]
