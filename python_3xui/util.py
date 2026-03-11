@@ -13,7 +13,7 @@ import base64
 import logging
 import random
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, tzinfo
 from typing import TypeAlias, Union, Dict, Any, List
 
 import httpx
@@ -94,7 +94,7 @@ def sub_from_tgid(telegram_id: int) -> str:
 ensure_2_digits = lambda x: str(x) if x >= 10 else f"0{x}"
 
 
-def get_telegram_uuid(telegram_id: int, fixed: bool = True) -> str:
+def get_uuid_from_tgid(telegram_id: int, fixed: bool = True) -> str:
     """Generate a UUID v4 format string from a Telegram ID.
 
     Creates a deterministic UUID based on the Telegram ID, useful for
@@ -109,9 +109,9 @@ def get_telegram_uuid(telegram_id: int, fixed: bool = True) -> str:
         A UUID-formatted string with the Telegram ID embedded in the last segment.
 
     Examples:
-        >>> get_telegram_uuid(12345)
+        >>> get_uuid_from_tgid(12345)
         '11111111-1111-1111-1111-0000000012345'
-        >>> get_telegram_uuid(12345, fixed=False)  # Uses current timestamp
+        >>> get_uuid_from_tgid(12345, fixed=False)  # Uses current timestamp
         '20260222-1230-1111-1111-0000000012345'
     """
     zeros = 12 - len(str(telegram_id))
@@ -142,7 +142,7 @@ def generate_random_email(length: int = 8) -> str:
     return s
 
 
-def generate_email_from_tgid_inbid(telegram_id: int, inbound_id: int) -> str:
+def generate_email_from_tgid_inbid(telegram_id: int, /, inbound_id: int) -> str:
     """Generate a deterministic email from Telegram ID and inbound ID.
 
     Creates a unique email identifier that combines the Telegram ID and
@@ -234,7 +234,7 @@ def get_days_until_expiry(expiry_time: int) -> float:
         Returns a very large number (infinity) if expiry_time is 0 (no expiry).
 
     Examples:
-        >>> get_days_until_expiry(int(datetime.now(UTC).timestamp()) + 86400)  # 1 day from now
+        >>> get_days_until_expiry(int(datetime.now(UTC).timestamp_seconds()) + 86400)  # 1 day from now
         1.0
         >>> get_days_until_expiry(0)  # No expiry
         inf
@@ -263,3 +263,27 @@ class DBLockedError(Exception):
             message: Explanation of the error.
         """
         super().__init__(message)
+
+def s_to_ms_timestamp(s: int|float) -> int:
+    """Convert a UNIX timestamp in seconds to milliseconds."""
+    return int(s * 1000)
+
+def ms_to_s_timestamp(ms: int|float) -> int:
+    """Convert a UNIX timestamp in milliseconds to seconds."""
+    return ms // 1000
+
+def auto_s_to_ms_timestamp(s_or_ms: int) -> int:
+    """Automatically convert a UNIX timestamp to milliseconds if it's in seconds."""
+    if s_or_ms < 1e12:  # If the timestamp is less than 1 trillion, it's likely in seconds
+        return s_to_ms_timestamp(s_or_ms)
+    return s_or_ms
+
+def auto_ms_to_s_timestamp(ms_or_s: int) -> int:
+    """Automatically convert a UNIX timestamp to seconds if it's in milliseconds."""
+    if ms_or_s > 1e12:  # If the timestamp is greater than 1 trillion, it's likely in milliseconds
+        return ms_to_s_timestamp(ms_or_s)
+    return ms_or_s
+
+def datetime_now_ms(tzinfo: tzinfo|None) -> int:
+    """Get the current time as a UNIX timestamp in milliseconds."""
+    return int(datetime.now(tzinfo).timestamp()) * 1000

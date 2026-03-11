@@ -1,15 +1,15 @@
 import json
 from types import NoneType
 from datetime import datetime, UTC
-from typing import Union, Optional, TypeAlias, Any, Annotated, Literal, List, Dict
+from typing import Union, Optional, TypeAlias, Any, Annotated, Literal, List, Dict, ClassVar
 
-from pydantic import field_validator, Field, field_serializer
+from pydantic import field_validator, Field, field_serializer, AfterValidator
 import pydantic
 
 from . import base_model
-from .util import JsonType
+from .util import JsonType, auto_s_to_ms_timestamp, s_to_ms_timestamp, ms_to_s_timestamp, auto_ms_to_s_timestamp
 
-timestamp: TypeAlias = int
+timestamp_seconds: TypeAlias = int
 ip_address: TypeAlias = str
 json_string: TypeAlias = str
 
@@ -48,20 +48,41 @@ class SingleInboundClient(pydantic.BaseModel):
         created_at: Timestamp of client creation.
         updated_at: Timestamp of last client update.
     """
+    TIME_FIELDS: ClassVar[List[str]] = ["expiry_time", "created_at", "updated_at"]
     uuid:  Annotated[str, Field(alias="id")] #yes they really did that...
     security: str = ""
     password: str = ""
     flow: Literal["", "xtls-rprx-vision", "xtls-rprx-vision-udp443"]
     email: Annotated[str, Field(alias="email")]
     limit_ip: Annotated[int, Field(alias="limitIp")] = 20
+    #Interestingly, the API expects this value to be called GB but it's actually bytes.
     limit_gb: Annotated[int, Field(alias="totalGB")] # total flow
-    expiry_time: Annotated[timestamp, Field(alias="expiryTime")] = 0
+    expiry_time: Annotated[timestamp_seconds, Field(alias="expiryTime")] = 0
     enable: bool = True
     tg_id: Annotated[Union[int, str], Field(alias="tgId")] = ""
     subscription_id: Annotated[str, Field(alias="subId")]
     comment: str = ""
-    created_at: Annotated[timestamp, Field(default_factory=(lambda: int(datetime.now(UTC).timestamp())))]
-    updated_at: Annotated[timestamp, Field(default_factory=(lambda: int(datetime.now(UTC).timestamp())))]
+    created_at: Annotated[timestamp_seconds, Field(
+        default_factory=(lambda: int(datetime.now(UTC).timestamp())))
+    ]
+    updated_at: Annotated[timestamp_seconds, Field(
+        default_factory=(lambda: int(datetime.now(UTC).timestamp())))
+    ]
+
+    @classmethod
+    @field_validator(TIME_FIELDS[0], *TIME_FIELDS[1:], mode="after")
+    def ensure_s_timestamp(cls, value: int) -> int:
+        return auto_ms_to_s_timestamp(value)
+
+    @classmethod
+    @field_serializer(TIME_FIELDS[0], *TIME_FIELDS[1:])
+    def serialize_ms_timestamp(cls, value: int) -> int:
+        return auto_s_to_ms_timestamp(value)
+
+    @field_serializer("limit_gb")
+    def serialize_total_gb(self, value: int) -> int:
+        return value * (1024 ** 2)  # Convert GB to bytes for API
+
 
 class InboundClients(pydantic.BaseModel):
     """Represents a collection of clients for an inbound connection.
@@ -90,12 +111,6 @@ class InboundClients(pydantic.BaseModel):
         """Serialize the settings object to a JSON string.
 
         The 3X-UI API expects settings as a JSON string, not an object.
-
-        Args:
-            value: The Settings object to serialize.
-
-        Returns:
-            A JSON string representation of the settings.
         """
         return json.dumps(value.model_dump(by_alias=True), ensure_ascii=False)
 
@@ -174,11 +189,12 @@ class ClientStats(base_model.BaseModel):
         up: Total uploaded bytes.
         down: Total downloaded bytes.
         allTime: Total bytes transferred (up + down).
-        expiryTime: Client expiry time as UNIX timestamp.
+        expiryTime: Client expiry time as UNIX timestamp in MILLISECONDS.
         total: Total data limit in bytes.
         reset: Counter for traffic resets.
         lastOnline: UNIX timestamp of last connection.
     """
+    TIME_FIELDS: ClassVar[List[str]] = ["expiryTime", "lastOnline"]
     id: int
     inboundId: int
     enable: bool
@@ -188,10 +204,20 @@ class ClientStats(base_model.BaseModel):
     up: int  # bytes
     down: int  # bytes
     allTime: int  # bytes
-    expiryTime: timestamp  # UNIX timestamp
+    expiryTime: timestamp_seconds  # UNIX timestamp
     total: int
     reset: int
-    lastOnline: timestamp
+    lastOnline: timestamp_seconds
+
+    @classmethod
+    @field_validator(TIME_FIELDS[0], *TIME_FIELDS[1:], mode="after")
+    def ensure_s_timestamp(cls, value: int) -> int:
+        return auto_ms_to_s_timestamp(value)
+
+    @classmethod
+    @field_serializer(TIME_FIELDS[0], *TIME_FIELDS[1:])
+    def serialize_ms_timestamp(cls, value: int) -> int:
+        return auto_s_to_ms_timestamp(value)
 
 
 class Inbound(base_model.BaseModel):
@@ -220,6 +246,7 @@ class Inbound(base_model.BaseModel):
         tag: Internal tag identifier for routing.
         sniffing: JSON sniffing configuration (auto-parsed from string).
     """
+    TIME_FIELDS: ClassVar[List[str]] = ["expiryTime", "lastTrafficResetTime"]
     id: int
     up: int  # bytes
     down: int  # bytes
@@ -227,9 +254,9 @@ class Inbound(base_model.BaseModel):
     allTime: int  # bytes
     remark: str
     enable: bool
-    expiryTime: timestamp  # UNIX timestamp
+    expiryTime: timestamp_seconds  # UNIX timestamp
     trafficReset: str  # "Never", "Weekly", "Monthly", "Daily"
-    lastTrafficResetTime: timestamp  # UNIX timestamp
+    lastTrafficResetTime: timestamp_seconds  # UNIX timestamp
     clientStats: Union[list[ClientStats], None]
     listen: str
     port: int
@@ -247,12 +274,6 @@ class Inbound(base_model.BaseModel):
 
         The 3X-UI API returns settings, streamSettings, and sniffing as
         JSON strings. This validator automatically parses them into dicts.
-
-        Args:
-            value: The JSON string to parse, or empty string.
-
-        Returns:
-            Parsed dictionary, or empty string if input was empty.
         """
         if value == "":
             return ""
@@ -265,13 +286,17 @@ class Inbound(base_model.BaseModel):
         """Serialize dictionary fields back to JSON strings.
 
         When sending data back to the API, these fields must be JSON strings.
-
-        Args:
-            value: The dictionary to serialize, or empty string.
-
-        Returns:
-            JSON string representation, or empty string if input was empty.
         """
         if value == "":
             return ""
         return json.dumps(value, ensure_ascii=False)
+
+    @classmethod
+    @field_validator(TIME_FIELDS[0], *TIME_FIELDS[1:], mode="after")
+    def ensure_s_timestamp(cls, value: int) -> int:
+        return auto_ms_to_s_timestamp(value)
+
+    @classmethod
+    @field_serializer(TIME_FIELDS[0], *TIME_FIELDS[1:])
+    def serialize_ms_timestamp(cls, value: int) -> int:
+        return auto_s_to_ms_timestamp(value)
