@@ -313,7 +313,7 @@ class XUIClient:
 
     #========================inbound management========================
     @alru_cache
-    async def get_production_inbounds(self) -> List[Inbound]:
+    async def get_production_inbounds(self) -> Tuple[Inbound, ...]:
         """Retrieve production inbounds.
 
         This method fetches all inbounds and filters them based on the
@@ -333,7 +333,7 @@ class XUIClient:
         if len(usable_inbounds) == 0:
             raise RuntimeError("No production inbounds found! Change prod_string!")
 
-        return usable_inbounds
+        return tuple(usable_inbounds)
 
     async def clear_prod_inbound_cache(self):
         """Clear the production inbound cache.
