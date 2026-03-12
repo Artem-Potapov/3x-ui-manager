@@ -13,6 +13,7 @@ PORT = int(os.getenv("PORT"))
 BASE_PATH = os.getenv("BASE_PATH")
 XUI_USERNAME = os.getenv("XUI_USERNAME")
 XUI_PASSWORD = os.getenv("XUI_PASSWORD")
+TWOFA_CODE = os.getenv("XUI_2FA_SECRET")
 
 base_url = f"https://{BASE_URL}:{PORT}/{BASE_PATH}"
 data = {
@@ -37,13 +38,15 @@ async def create_client(telegram_id: int):
 async def main():
     async with XUIClient(BASE_URL, PORT, BASE_PATH,
                          username=XUI_USERNAME,
-                         password=XUI_PASSWORD) as client:
+                         password=XUI_PASSWORD,
+                         two_fac_code=TWOFA_CODE) as client:
         await client.create_and_add_prod_client(128124812, "help me")
         await asyncio.sleep(2)
         print("INB CREATED")
         await client.delete_client_by_tgid_all_inbounds(128124812)
         while True:
             await asyncio.sleep(1)
+            print("epstein")
 
 
 if __name__ == "__main__":
