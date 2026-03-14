@@ -1,13 +1,12 @@
 import json
-from types import NoneType
 from datetime import datetime, UTC
-from typing import Union, Optional, TypeAlias, Any, Annotated, Literal, List, Dict, ClassVar
+from typing import Union, TypeAlias, Any, Annotated, Literal, List, Dict, ClassVar
 
-from pydantic import field_validator, Field, field_serializer, AfterValidator
 import pydantic
+from pydantic import field_validator, Field, field_serializer
 
 from . import base_model
-from .util import JsonType, auto_s_to_ms_timestamp, s_to_ms_timestamp, ms_to_s_timestamp, auto_ms_to_s_timestamp
+from .util import JsonType, auto_s_to_ms_timestamp, auto_ms_to_s_timestamp
 
 timestamp_seconds: TypeAlias = int
 ip_address: TypeAlias = str

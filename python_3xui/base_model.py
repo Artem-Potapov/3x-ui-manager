@@ -27,9 +27,9 @@ class BaseModel(pydantic.BaseModel):
 
     model_config = pydantic.ConfigDict(ignored_types=(cached_property, ))
 
-    def model_post_init(self, context: Any, /) -> None:
-        #print(f"Model {self.__class__}, {self} initialized")
-        ...
+    # def model_post_init(self, context: Any, /) -> None:
+    #     #print(f"Model {self.__class__}, {self} initialized")
+    #     ...
 
 
     @classmethod

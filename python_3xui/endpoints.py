@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime, UTC
 from typing import Generic, Literal, List, Dict
 
@@ -232,17 +233,9 @@ class Clients(BaseEndpoint):
         else:
             raise TypeError
         # send request
-        print(type(final))
-        print(final)
         data = final.model_dump(by_alias=True)
-        print(type(data))
-        print(json.dumps(data))
-        print(f"{self._url}{endpoint}")
         resp = await self.client.safe_post(f"{self._url}{endpoint}", data=data)
-
         #YOU NEED TO PASS SETTINGS AS A STRING, NOT AS A DICT, YOU FUCKING DUMBASS!
-        print(resp)
-        print(resp.json())
         return resp
 
     async def _request_update_client(self, client: models.InboundClients | models.SingleInboundClient,

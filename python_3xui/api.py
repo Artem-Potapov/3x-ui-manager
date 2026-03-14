@@ -127,20 +127,21 @@ class XUIClient:
         Raises:
             RuntimeError: If max retries exceeded or session is invalid.
         """
-        print(f"SAFE REQUEST, {method}, is running to a URL of {kwargs["url"]}")
-        print(str(self.session.base_url) + str(kwargs["url"]))
+        logging.debug("Safe request is running to %s%s", str(self.session.base_url), str(kwargs["url"]))
         async for attempt in async_range(self.max_retries):
             resp = await self.session.request(method=method, **kwargs)
             if resp.status_code // 100 != 2:  #because it can return either 201 or 202
                 if resp.status_code == 404:
                     now: float = datetime.now(UTC).timestamp()
                     if self.session_start is None or now - self.session_start > self.session_duration:
-                        print("Guys, we're not logged in, fixing that rn")
+                        logging.info("Client with IP/Domain %s is not logged in, logging in...", self.base_host)
                         await self.login()
                         continue
                     else:
+                        logging.error("Server returned a status code of %s with a valid session", resp.status_code)
                         raise RuntimeError("""Server returned a 404, and the session should still be valid, likely it's a REAL 404""")
                 else:
+                    logging.error("Server returned a status code of %s", resp.status_code)
                     raise RuntimeError(f"Wrong status code: {resp.status_code}")
 
             status = await util.check_xui_response_validity(resp)
@@ -257,8 +258,7 @@ class XUIClient:
             if self.two_fac_secret:
                 payload["twoFactorCode"] = self.two_fac_secret
 
-        print(self.session.base_url)
-        print("WE'RE LOGGING IN")
+        logging.info("Client is logging in with IP/Domain: %s", self.base_host)
         resp = await self.session.post("/login", data=payload)
         if resp.status_code == 200:
             resp_json = resp.json()
@@ -278,7 +278,7 @@ class XUIClient:
         Returns:
             Self: The XUIClient instance.
         """
-        logging.log(DEBUG, "Client connected at %(asctime)s with IP/domain %s", self.base_url)
+        logging.log(DEBUG, "Client connected with IP/domain %s", self.base_url)
         self.session = AsyncClient(base_url=self.base_url)
         self.connected = True
         return self
@@ -317,7 +317,13 @@ class XUIClient:
             exc_val: The exception value, if an exception occurred.
             exc_tb: The exception traceback, if an exception occurred.
         """
-        print("disconnectin'")
+        if exc_type is None:
+            logging.info("Client is disconnecting at time with IP/Domain %s", self.base_host)
+        else:
+            logging.warning("Client is disconnecting due to an error (may be unrelated):"
+                            "\n%s, with value %s\nStacktrace:%s",
+                            exc_type, exc_val, exc_tb)
+        print(f"Client is disconnecting: {self.base_host}")
         await self.disconnect()
         return
 
@@ -357,12 +363,9 @@ class XUIClient:
             timer from 5 to 60*60*24 in the code.
         """
         while self.connected:
-            print("You're seeing this message because I forgot to remove it in api.update_inbounds() !")
-            print("Please change the timer from 5 to 60*60*24!")
             self.get_production_inbounds.cache_clear()
             await self.get_production_inbounds() #fill the cache
-            await asyncio.sleep(10)
-            #print(stat)
+            await asyncio.sleep(3600) #update every 1h
 
     #========================clients management========================
     async def get_client_with_tgid(self, tgid: int, inbound_id: int | None = None) -> List[ClientStats]:
@@ -499,7 +502,7 @@ class XUIClient:
             email = util.generate_email_from_tgid_inbid(telegram_id, inbound.id)
             resp = await self.clients_end.delete_client_by_email(email, inbound.id)
             responses.append(resp)
-        print("Inbound deleted")
+        logging.info("Clients of of tgid %s deleted", telegram_id)
 
         return responses
 

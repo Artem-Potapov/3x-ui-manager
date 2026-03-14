@@ -1,11 +1,17 @@
 import asyncio
 import json
+import logging
 
 import httpx
 import dotenv, os
 
 from python_3xui.api import XUIClient
 from python_3xui.models import Inbound, SingleInboundClient
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+)
 
 dotenv.load_dotenv("./.env")
 BASE_URL = os.getenv("BASE_URL")
@@ -39,7 +45,8 @@ async def main():
     async with XUIClient(BASE_URL, PORT, BASE_PATH,
                          username=XUI_USERNAME,
                          password=XUI_PASSWORD,
-                         two_fac_code=TWOFA_CODE) as client:
+                         two_fac_code=TWOFA_CODE,
+                         custom_prod_string="test3") as client:
         await client.create_and_add_prod_client(128124812, "help me")
         await asyncio.sleep(2)
         print("INB CREATED")
