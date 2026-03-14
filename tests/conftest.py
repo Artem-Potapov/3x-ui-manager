@@ -36,8 +36,9 @@ async def xui_client() -> XUIClient:
     base_path = os.getenv("BASE_PATH")
     username = os.getenv("XUI_USERNAME")
     password = os.getenv("XUI_PASSWORD")
+    two_fac = os.getenv("XUI_2FA_SECRET")
 
-    if not all([base_url, port_str, base_path, username, password]):
+    if not all([base_url, port_str, base_path, username, password, two_fac]):
         pytest.skip("Environment variables for XUIClient not configured (.env file required)")
 
     try:
@@ -48,7 +49,7 @@ async def xui_client() -> XUIClient:
     # Reset singleton for clean test state
     XUIClient._instance = None
 
-    client = XUIClient(base_url, port, base_path, username=username, password=password)
+    client = XUIClient(base_url, port, base_path, username=username, password=password, two_fac_code=two_fac, custom_prod_string="test3")
     client.connect()
 
     # Authenticate
